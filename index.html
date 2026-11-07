@@ -90,14 +90,7 @@
                 </div>
                 <div class="info-group">
                     <label>මේස අංකය (TABLE NO)</label>
-                    <select id="tableNumber">
-                        <option value="Table 01">Table 01</option>
-                        <option value="Table 02">Table 02</option>
-                        <option value="Table 03">Table 03</option>
-                        <option value="Table 04">Table 04</option>
-                        <option value="VIP Room">VIP Room</option>
-                        <option value="Takeaway">Takeaway (පාර්සල්)</option>
-                    </select>
+                    <select id="tableNumber"></select>
                 </div>
             </div>
 
@@ -138,6 +131,20 @@
         <!-- ADMIN TAB -->
         <div id="adminSection" class="section">
             <h2>⚙️ හෝටල් පාලන පැනලය (Admin Panel)</h2>
+            <br>
+
+            <!-- Table Management Section -->
+            <h3>🪑 මේස කළමනාකරණය (Tables Management)</h3>
+            <div class="form-card">
+                <form onsubmit="addTable(event)" class="form-grid">
+                    <input type="text" id="tableNameInput" placeholder="මේසයේ නම / අංකය (උදා: Table 05, VIP 02)" required>
+                    <button type="submit" class="save-btn" style="background:#0284c7;">මේසය එකතු කරන්න</button>
+                </form>
+            </div>
+            <table>
+                <thead><tr><th>මේසයේ නම</th><th>ක්‍රියාමාර්ග</th></tr></thead>
+                <tbody id="adminTableList"></tbody>
+            </table>
             <br>
 
             <h3>💰 සේවා ගාස්තු සැකසුම් (Service Charge Settings)</h3>
@@ -202,6 +209,7 @@
         const db = firebase.database();
 
         let waiters = [];
+        let tables = [];
         let menuItems = [];
         let activeOrders = [];
         let serviceChargePercent = 10;
@@ -215,6 +223,13 @@
                 waiters = snapshot.val() || ["මේනක", "සනුක", "රොෂාන්"];
                 renderWaiters();
                 renderAdminWaiters();
+            });
+
+            // Tables sync
+            db.ref('tables').on('value', (snapshot) => {
+                tables = snapshot.val() || ["Table 01", "Table 02", "Table 03", "Table 04", "VIP Room", "Takeaway"];
+                renderTables();
+                renderAdminTablesList();
             });
 
             // Menu sync
@@ -275,6 +290,43 @@
             alert("Service Charge වෙනස් කරන ලදී!");
         }
 
+        // --- Table Management Functions ---
+        function renderTables() {
+            const select = document.getElementById('tableNumber');
+            if(!select) return;
+            select.innerHTML = '';
+            if(tables.length === 0) { select.innerHTML = `<option value="">මේස නැත</option>`; return; }
+            tables.forEach(t => { select.innerHTML += `<option value="${t}">${t}</option>`; });
+        }
+
+        function renderAdminTablesList() {
+            const tbody = document.getElementById('adminTableList');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+            tables.forEach((t, index) => {
+                tbody.innerHTML += `<tr><td><b>${t}</b></td><td><button class="del-btn" onclick="deleteTable(${index})">අයින් කරන්න</button></td></tr>`;
+            });
+        }
+
+        function addTable(e) {
+            e.preventDefault();
+            const name = document.getElementById('tableNameInput').value.trim();
+            if(name && !tables.includes(name)) {
+                tables.push(name);
+                db.ref('tables').set(tables);
+                e.target.reset();
+                alert("මේසය සාර්ථකව එකතු කරන ලදී!");
+            } else {
+                alert("මෙම නම දැනටමත් ඇත නැතහොත් හිස්ය!");
+            }
+        }
+
+        function deleteTable(index) {
+            tables.splice(index, 1);
+            db.ref('tables').set(tables);
+        }
+
+        // --- Waiter Management Functions ---
         function renderWaiters() {
             const select = document.getElementById('waiterSelect');
             if(!select) return;
@@ -391,7 +443,6 @@
             document.getElementById('sendBtn').disabled = false;
         }
 
-        // --- මෙන්න sendOrder() function එක ---
         function sendOrder() {
             const waiterSelect = document.getElementById('waiterSelect');
             const tableSelect = document.getElementById('tableNumber');
@@ -400,6 +451,7 @@
             const table = tableSelect ? tableSelect.value : "Table 01";
             
             if(!waiter) { alert("වේටර් කෙනෙක් තෝරන්න!"); return; }
+            if(!table) { alert("මේස අංකයක් තෝරන්න!"); return; }
             
             let items = [];
             Object.keys(draft).forEach(id => {
