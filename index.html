@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="si">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hotel Ordering System - Firebase Realtime</title>
+    
+    <!-- Firebase App & Realtime Database SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
+        body { background-color: #f1f5f9; color: #1e293b; padding-bottom: 20px; }
+        header { background: #0f172a; color: white; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .logo { font-size: 1.2rem; font-weight: bold; color: #f59e0b; }
+        .nav-tabs { display: flex; gap: 8px; }
+        .tab-btn { background: #1e293b; color: #cbd5e1; border: 1px solid #334155; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.9rem; position: relative; }
+        .tab-btn.active { background: #f59e0b; color: #020617; border-color: #f59e0b; }
+        .badge { background: #ef4444; color: white; font-size: 0.75rem; padding: 2px 6px; border-radius: 50%; position: absolute; top: -5px; right: -5px; }
+        .container { max-width: 1200px; margin: 20px auto; padding: 0 15px; }
+        
+        .info-bar { background: white; padding: 15px; border-radius: 12px; margin-bottom: 20px; display: flex; gap: 20px; flex-wrap: wrap; border: 1px solid #e2e8f0; align-items: center; }
+        .info-group { flex: 1; min-width: 200px; }
+        .info-group label { display: block; font-size: 0.8rem; font-weight: bold; color: #64748b; margin-bottom: 5px; }
+        .info-group select { width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 600; }
+        
+        .main-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+        @media(max-width: 800px){ .main-layout { grid-template-columns: 1fr; } }
+
+        .cat-bar { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 15px; padding-bottom: 5px; }
+        .cat-btn { background: white; border: 1px solid #cbd5e1; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; white-space: nowrap; }
+        .cat-btn.active { background: #0f172a; color: white; border-color: #0f172a; }
+
+        .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; }
+        .food-card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 15px; display: flex; flex-direction: column; justify-content: space-between; }
+        .food-icon { font-size: 2rem; }
+        .food-name { font-weight: bold; margin: 5px 0; }
+        .food-price { color: #d97706; font-weight: bold; margin-bottom: 10px; }
+        .qty-controls { display: flex; justify-content: space-between; align-items: center; background: #f8fafc; padding: 5px; border-radius: 6px; }
+        .qty-btn { width: 28px; height: 28px; background: #e2e8f0; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
+        .qty-btn.plus { background: #f59e0b; color: black; }
+
+        .cart-box { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 15px; }
+        .cart-title { font-weight: bold; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 10px; }
+        .cart-items { max-height: 250px; overflow-y: auto; margin-bottom: 15px; }
+        .cart-item { display: flex; justify-content: space-between; font-size: 0.9rem; padding: 6px 0; border-bottom: 1px dashed #f1f5f9; }
+
+        .bill-row { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 5px; }
+        .bill-total { font-weight: bold; font-size: 1.1rem; color: #d97706; border-top: 1px solid #e2e8f0; padding-top: 5px; }
+        .send-btn { width: 100%; background: #22c55e; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; margin-top: 10px; }
+        .send-btn:disabled { background: #cbd5e1; cursor: not-allowed; }
+
+        .section { display: none; }
+        .section.active { display: block; }
+        
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
+        th, td { padding: 10px 15px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f8fafc; font-size: 0.85rem; color: #64748b; }
+        
+        .form-card { background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e2e8f0; }
+        .form-grid { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .form-grid input, .form-grid select { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; flex: 1; min-width: 150px; }
+        .save-btn { background: #0f172a; color: white; border: none; padding: 8px 15px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+        .del-btn { background: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+        
+        .alert-box { background: #eff6ff; border: 1px solid #bfdbfe; padding: 12px; border-radius: 8px; margin-bottom: 15px; color: #1e40af; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">🍴 ස්මාර්ට් හොටෙල් POS (Cloud Sync)</div>
+        <div class="nav-tabs">
+            <button class="tab-btn active" onclick="showTab('waiter')">වේටර් පැනලය <span id="waiterAlertBadge" class="badge" style="display:none;">!</span></button>
+            <button class="tab-btn" onclick="showTab('cashier')">කැෂියර් පැනලය <span id="cashierBadge" class="badge" style="display:none;">0</span></button>
+            <button class="tab-btn" onclick="showTab('admin')">Admin පැනලය</button>
+        </div>
+    </header>
+
+    <div class="container">
+
+        <!-- WAITER TAB -->
+        <div id="waiterSection" class="section active">
+            <div id="waiterAlertContainer"></div>
+            <div class="info-bar">
+                <div class="info-group">
+                    <label>වේටර් තෝරන්න (Select Waiter)</label>
+                    <select id="waiterSelect"></select>
+                </div>
+                <div class="info-group">
+                    <label>මේස අංකය (TABLE NO)</label>
+                    <select id="tableNumber">
+                        <option value="Table 01">Table 01</option>
+                        <option value="Table 02">Table 02</option>
+                        <option value="Table 03">Table 03</option>
+                        <option value="Table 04">Table 04</option>
+                        <option value="VIP Room">VIP Room</option>
+                        <option value="Takeaway">Takeaway (පාර්සල්)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="main-layout">
+                <div>
+                    <div class="cat-bar" id="catBar"></div>
+                    <div class="menu-grid" id="menuGrid"></div>
+                </div>
+                <div class="cart-box">
+                    <div class="cart-title">🛒 නව ඕඩරය (Draft)</div>
+                    <div class="cart-items" id="cartList">
+                        <p style="text-align:center; color:#94a3b8; padding: 20px 0;">කෑම තෝරන්න...</p>
+                    </div>
+                    <div class="bill-row"><span>Subtotal:</span> <span id="subTotal">Rs. 0.00</span></div>
+                    <div class="bill-row"><span>Service Charge (<span id="serviceLabel">10</span>%):</span> <span id="taxTotal">Rs. 0.00</span></div>
+                    <div class="bill-row bill-total"><span>මුළු එකතුව:</span> <span id="grandTotal">Rs. 0.00</span></div>
+                    <button class="send-btn" id="sendBtn" onclick="sendOrder()" disabled>ඕඩර් කරන්න (Send to Cashier)</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CASHIER TAB -->
+        <div id="cashierSection" class="section">
+            <h2>🔔 කැෂියර් පාලන පැනලය (Live Real-time Orders)</h2>
+            <br>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                <div>
+                    <h3>Kitchen / Pending Orders</h3>
+                    <div id="cashierPendingGrid" style="margin-top:10px; display:grid; gap:15px;"></div>
+                </div>
+                <div>
+                    <h3>Billing & Checkout (Served Orders)</h3>
+                    <div id="cashierBillingGrid" style="margin-top:10px; display:grid; gap:15px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ADMIN TAB -->
+        <div id="adminSection" class="section">
+            <h2>⚙️ හෝටල් පාලන පැනලය (Admin Panel)</h2>
+            <br>
+
+            <h3>💰 සේවා ගාස්තු සැකසුම් (Service Charge Settings)</h3>
+            <div class="form-card">
+                <div class="form-grid">
+                    <label><b>Service Charge ප්‍රතිශතය (%):</b></label>
+                    <input type="number" id="serviceChargeInput" value="10" min="0" max="100" style="max-width:150px;">
+                    <button type="button" class="save-btn" onclick="updateServiceCharge()">Charge එක වෙනස් කරන්න</button>
+                </div>
+            </div>
+            <br>
+
+            <h3>👤 වේටර්වරුන් ලියාපදිංචි කිරීම</h3>
+            <div class="form-card">
+                <form onsubmit="addWaiter(event)" class="form-grid">
+                    <input type="text" id="waiterNameInput" placeholder="වේටර්ගේ නම ඇතුළත් කරන්න" required>
+                    <button type="submit" class="save-btn" style="background:#2563eb;">වේටර් Register කරන්න</button>
+                </form>
+            </div>
+            <table>
+                <thead><tr><th>වේටර්ගේ නම</th><th>ක්‍රියාමාර්ග</th></tr></thead>
+                <tbody id="adminWaiterTable"></tbody>
+            </table>
+
+            <br>
+            <h3>🍽️ මෙනු කළමනාකරණය</h3>
+            <div class="form-card">
+                <form onsubmit="addMenuItem(event)" class="form-grid">
+                    <input type="text" id="addName" placeholder="කෑමේ නම" required>
+                    <input type="number" id="addPrice" placeholder="මිල (Rs.)" required>
+                    <select id="addCat">
+                        <option value="main">ප්‍රධාන කෑම</option>
+                        <option value="drinks">බීම වර්ග</option>
+                        <option value="snacks">ෂෝට් ඊට්ස්</option>
+                    </select>
+                    <input type="text" id="addIcon" placeholder="Emoji (උදා: 🍛)" value="🍽️">
+                    <button type="submit" class="save-btn">කෑම එකතු කරන්න</button>
+                </form>
+            </div>
+            <table>
+                <thead><tr><th>කෑම</th><th>වර්ගය</th><th>මිල</th><th>තත්ත්වය</th><th>ක්‍රියාමාර්ග</th></tr></thead>
+                <tbody id="adminTable"></tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <script>
+        // ඔයාගේ Firebase Config එක මෙතැනට දමා ඇත
+        const firebaseConfig = {
+            apiKey: "AIzaSyCBsEgSG_sYyXBXDXa46ZzGF1WYcFZ37uA",
+            authDomain: "hotel-ordering-system-8f34f.firebaseapp.com",
+            projectId: "hotel-ordering-system-8f34f",
+            storageBucket: "hotel-ordering-system-8f34f.firebasestorage.app",
+            messagingSenderId: "979961313521",
+            appId: "1:979961313521:web:0fc3d63d2d6dfffd48d150",
+            measurementId: "G-WDK9M7FYEF"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        let waiters = [];
+        let menuItems = [];
+        let activeOrders = [];
+        let serviceChargePercent = 10;
+        let draft = {};
+        let currentCat = "all";
+
+        // Listen to Realtime Database changes automatically
+        function initFirebaseListeners() {
+            // Waiters sync
+            db.ref('waiters').on('value', (snapshot) => {
+                waiters = snapshot.val() || ["මේනක", "සනුක", "රොෂාන්"];
+                renderWaiters();
+                renderAdminWaiters();
+            });
+
+            // Menu sync
+            db.ref('menu').on('value', (snapshot) => {
+                menuItems = snapshot.val() || [
+                    { id: 1, name: "Chicken Fried Rice", price: 1200, category: "main", icon: "🍚", available: true },
+                    { id: 2, name: "Seafood Kottu", price: 1400, category: "main", icon: "🥘", available: true },
+                    { id: 3, name: "Iced Coffee", price: 300, category: "drinks", icon: "🧋", available: true },
+                    { id: 4, name: "Chicken Pastry", price: 150, category: "snacks", icon: "🥐", available: true }
+                ];
+                renderCatBar();
+                renderMenu();
+                renderAdminTable();
+            });
+
+            // Orders sync
+            db.ref('orders').on('value', (snapshot) => {
+                const data = snapshot.val();
+                activeOrders = data ? Object.values(data) : [];
+                renderAllOrders();
+            });
+
+            // Service Charge sync
+            db.ref('serviceCharge').on('value', (snapshot) => {
+                serviceChargePercent = snapshot.val() !== null ? snapshot.val() : 10;
+                const inputEl = document.getElementById('serviceChargeInput');
+                const labelEl = document.getElementById('serviceLabel');
+                if(inputEl) inputEl.value = serviceChargePercent;
+                if(labelEl) labelEl.innerText = serviceChargePercent;
+                renderCart();
+            });
+        }
+
+        function init() {
+            initFirebaseListeners();
+        }
+
+        function showTab(tab) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            
+            if(tab === 'waiter') {
+                document.getElementById('waiterSection').classList.add('active');
+                event.target.classList.add('active');
+            } else if(tab === 'cashier') {
+                document.getElementById('cashierSection').classList.add('active');
+                event.target.classList.add('active');
+            } else {
+                document.getElementById('adminSection').classList.add('active');
+                event.target.classList.add('active');
+            }
+        }
+
+        function updateServiceCharge() {
+            const val = parseFloat(document.getElementById('serviceChargeInput').value);
+            if(isNaN(val) || val < 0) { alert("సరైన අගයක් ඇතුළත් කරන්න!"); return; }
+            db.ref('serviceCharge').set(val);
+            alert("Service Charge වෙනස් කරන ලදී!");
+        }
+
+        function renderWaiters() {
+            const select = document.getElementById('waiterSelect');
+            if(!select) return;
+            select.innerHTML = '';
+            if(waiters.length === 0) { select.innerHTML = `<option value="">වේටර්වරුන් නැත</option>`; return; }
+            waiters.forEach(w => { select.innerHTML += `<option value="${w}">${w}</option>`; });
+        }
+
+        function renderAdminWaiters() {
+            const tbody = document.getElementById('adminWaiterTable');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+            waiters.forEach((w, index) => {
+                tbody.innerHTML += `<tr><td><b>${w}</b></td><td><button class="del-btn" onclick="deleteWaiter(${index})">අයින් කරන්න</button></td></tr>`;
+            });
+        }
+
+        function addWaiter(e) {
+            e.preventDefault();
+            const name = document.getElementById('waiterNameInput').value.trim();
+            if(name && !waiters.includes(name)) {
+                waiters.push(name);
+                db.ref('waiters').set(waiters);
+                e.target.reset();
+                alert("වේටර් Register කරන ලදී!");
+            }
+        }
+
+        function deleteWaiter(index) {
+            waiters.splice(index, 1);
+            db.ref('waiters').set(waiters);
+        }
+
+        function renderCatBar() {
+            const bar = document.getElementById('catBar');
+            if(!bar) return;
+            bar.innerHTML = `
+                <button class="cat-btn ${currentCat==='all'?'active':''}" onclick="setCat('all')">සියල්ල</button>
+                <button class="cat-btn ${currentCat==='main'?'active':''}" onclick="setCat('main')">ප්‍රධාන කෑම</button>
+                <button class="cat-btn ${currentCat==='drinks'?'active':''}" onclick="setCat('drinks')">බීම වර්ග</button>
+                <button class="cat-btn ${currentCat==='snacks'?'active':''}" onclick="setCat('snacks')">ෂෝට් ඊට්ස්</button>
+            `;
+        }
+
+        function setCat(cat) { currentCat = cat; renderCatBar(); renderMenu(); }
+
+        function renderMenu() {
+            const grid = document.getElementById('menuGrid');
+            if(!grid) return;
+            grid.innerHTML = '';
+            const list = currentCat === 'all' ? menuItems : menuItems.filter(m => m.category === currentCat);
+            
+            list.forEach(item => {
+                if(!item.available) return;
+                const qty = draft[item.id] || 0;
+                grid.innerHTML += `
+                    <div class="food-card">
+                        <div class="food-icon">${item.icon}</div>
+                        <div class="food-name">${item.name}</div>
+                        <div class="food-price">Rs. ${item.price.toFixed(2)}</div>
+                        <div class="qty-controls">
+                            <button class="qty-btn" onclick="changeQty(${item.id}, -1)">-</button>
+                            <span><b>${qty}</b></span>
+                            <button class="qty-btn plus" onclick="changeQty(${item.id}, 1)">+</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function changeQty(id, delta) {
+            const current = draft[id] || 0;
+            const updated = current + delta;
+            if(updated <= 0) delete draft[id];
+            else draft[id] = updated;
+            renderMenu();
+            renderCart();
+        }
+
+        function renderCart() {
+            const cartList = document.getElementById('cartList');
+            if(!cartList) return;
+            const keys = Object.keys(draft);
+            if(keys.length === 0) {
+                cartList.innerHTML = '<p style="text-align:center; color:#94a3b8; padding: 20px 0;">කෑම තෝරන්න...</p>';
+                document.getElementById('subTotal').innerText = 'Rs. 0.00';
+                document.getElementById('taxTotal').innerText = 'Rs. 0.00';
+                document.getElementById('grandTotal').innerText = 'Rs. 0.00';
+                document.getElementById('sendBtn').disabled = true;
+                return;
+            }
+
+            let sub = 0;
+            cartList.innerHTML = '';
+            keys.forEach(id => {
+                const item = menuItems.find(m => m.id == id);
+                if(!item) return;
+                const qty = draft[id];
+                const tot = item.price * qty;
+                sub += tot;
+                cartList.innerHTML += `
+                    <div class="cart-item">
+                        <div><b>${item.name}</b><br><small>Rs.${item.price} x ${qty}</small></div>
+                        <div><b>Rs. ${tot.toFixed(2)}</b></div>
+                    </div>
+                `;
+            });
+
+            const tax = sub * (serviceChargePercent / 100);
+            const grand = sub + tax;
+            document.getElementById('subTotal').innerText = 'Rs. ' + sub.toFixed(2);
+            document.getElementById('taxTotal').innerText = 'Rs. ' + tax.toFixed(2);
+            document.getElementById('grandTotal').innerText = 'Rs. ' + grand.toFixed(2);
+            document.getElementById('sendBtn').disabled = false;
+        }
+
+        // --- මෙන්න sendOrder() function එක ---
+        function sendOrder() {
+            const waiterSelect = document.getElementById('waiterSelect');
+            const tableSelect = document.getElementById('tableNumber');
+            
+            const waiter = waiterSelect ? waiterSelect.value : "මේනක";
+            const table = tableSelect ? tableSelect.value : "Table 01";
+            
+            if(!waiter) { alert("වේටර් කෙනෙක් තෝරන්න!"); return; }
+            
+            let items = [];
+            Object.keys(draft).forEach(id => {
+                const item = menuItems.find(m => m.id == id);
+                if(item) items.push({ name: item.name, qty: draft[id], price: item.price, total: item.price * draft[id] });
+            });
+
+            const newOrderRef = db.ref('orders').push();
+            const newOrderKey = newOrderRef.key;
+            
+            const newOrder = {
+                firebaseKey: newOrderKey,
+                id: 'ORD-' + Math.floor(1000 + Math.random() * 9000),
+                waiter: waiter,
+                table: table,
+                items: items,
+                grandTotalText: document.getElementById('grandTotal').innerText,
+                status: 'pending'
+            };
+
+            newOrderRef.set(newOrder, (error) => {
+                if (error) {
+                    alert("Order එක යැවීමට අපොහොසත් විය: " + error.message);
+                } else {
+                    draft = {};
+                    renderMenu();
+                    renderCart();
+                    alert("ඕඩරය කැෂියර් වෙත සාර්ථකව යවන ලදී!");
+                }
+            });
+        }
+
+        function renderAllOrders() {
+            const pendingList = activeOrders.filter(o => o.status === 'pending');
+            const readyList = activeOrders.filter(o => o.status === 'ready');
+            const servedList = activeOrders.filter(o => o.status === 'served');
+
+            const cashierBadge = document.getElementById('cashierBadge');
+            if(cashierBadge) {
+                cashierBadge.innerText = pendingList.length + readyList.length;
+                cashierBadge.style.display = (pendingList.length + readyList.length) > 0 ? 'inline-block' : 'none';
+            }
+
+            const currentWaiterSelect = document.getElementById('waiterSelect');
+            const currentWaiter = currentWaiterSelect ? currentWaiterSelect.value : '';
+            const waiterAlertContainer = document.getElementById('waiterAlertContainer');
+            const waiterAlertBadge = document.getElementById('waiterAlertBadge');
+            
+            const myReadyOrders = activeOrders.filter(o => o.waiter === currentWaiter && o.status === 'ready');
+            if(waiterAlertBadge && waiterAlertContainer) {
+                if(myReadyOrders.length > 0) {
+                    waiterAlertBadge.style.display = 'inline-block';
+                    let alertHtml = '';
+                    myReadyOrders.forEach(o => {
+                        alertHtml += `<div class="alert-box">🔔 ${o.table} සඳහා කෑම සූදානම් කර ඇත! ගොස් කස්ටමර්ට බාර දෙන්න. <button class="save-btn" style="float:right; padding:2px 8px;" onclick="waiterSubmit('${o.firebaseKey}')">කස්ටමර්ට බාර දුන්නා</button></div>`;
+                    });
+                    waiterAlertContainer.innerHTML = alertHtml;
+                } else {
+                    waiterAlertBadge.style.display = 'none';
+                    waiterAlertContainer.innerHTML = '';
+                }
+            }
+
+            // Cashier Pending Grid
+            const cashierPendingGrid = document.getElementById('cashierPendingGrid');
+            if(cashierPendingGrid) {
+                cashierPendingGrid.innerHTML = pendingList.length === 0 ? '<p style="color:#64748b;">පෙන්ඩින් ඕඩර් නැත.</p>' : '';
+                pendingList.forEach(o => {
+                    let itemsHtml = o.items.map(i => `<li>${i.name} x ${i.qty}</li>`).join('');
+                    cashierPendingGrid.innerHTML += `
+                        <div class="food-card" style="border-left:4px solid #f59e0b;">
+                            <div><h3>${o.table} (#${o.id})</h3><small>වේටර්: ${o.waiter}</small><ul style="margin:8px 0 8px 15px; font-size:0.9rem;">${itemsHtml}</ul></div>
+                            <div><button class="send-btn" style="background:#2563eb;" onclick="cashierSendToKitchen('${o.firebaseKey}')">Kitchen එකට යැවුවා & Ready කරන්න</button></div>
+                        </div>
+                    `;
+                });
+            }
+
+            // Cashier Billing Grid
+            const cashierBillingGrid = document.getElementById('cashierBillingGrid');
+            if(cashierBillingGrid) {
+                const billingItems = activeOrders.filter(o => o.status === 'served');
+                cashierBillingGrid.innerHTML = billingItems.length === 0 ? '<p style="color:#64748b;">ബිල් කිරීමට ඕඩර් නැත.</p>' : '';
+                billingItems.forEach(o => {
+                    let itemsHtml = o.items.map(i => `<div style="display:flex; justify-content:space-between; font-size:0.85rem;"><span>${i.name} (x${i.qty})</span> <span>Rs. ${i.total.toFixed(2)}</span></div>`).join('');
+                    cashierBillingGrid.innerHTML += `
+                        <div class="food-card" style="border-left:4px solid #16a34a; background:#f0fdf4;">
+                            <div>
+                                <h3>${o.table} (#${o.id})</h3><small>වේටර්: ${o.waiter} | <span style="color:green; font-weight:bold;">Served</span></small>
+                                <div style="margin:8px 0; border-top:1px dashed #cbd5e1; border-bottom:1px dashed #cbd5e1; padding:6px 0;">${itemsHtml}</div>
+                            </div>
+                            <div>
+                                <div style="font-weight:bold; color:#d97706; margin-bottom: 8px; font-size:1.1rem;">මුළු එකතුව: ${o.grandTotalText}</div>
+                                <button class="send-btn" style="background:#16a34a;" onclick="cashierCompleteOrder('${o.firebaseKey}')">සල්ලි අරගෙන Clean / Finish කරන්න</button>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+        }
+
+        function cashierSendToKitchen(firebaseKey) {
+            db.ref('orders/' + firebaseKey).update({ status: 'ready' });
+        }
+
+        function waiterSubmit(firebaseKey) {
+            db.ref('orders/' + firebaseKey).update({ status: 'served' });
+        }
+
+        function cashierCompleteOrder(firebaseKey) {
+            db.ref('orders/' + firebaseKey).remove();
+        }
+
+        function renderAdminTable() {
+            const tbody = document.getElementById('adminTable');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+            menuItems.forEach((item, index) => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${item.icon} ${item.name}</td>
+                        <td>${item.category}</td>
+                        <td>Rs. ${item.price}</td>
+                        <td><button class="save-btn" style="padding:4px 10px; font-size:0.85rem; background:${item.available?'#16a34a':'#dc2626'};" onclick="toggleAvail(${index})">${item.available ? 'ඇත' : 'නැත'}</button></td>
+                        <td><button class="del-btn" onclick="delItem(${index})">අයින් කරන්න</button></td>
+                    </tr>
+                `;
+            });
+        }
+
+        function addMenuItem(e) {
+            e.preventDefault();
+            const name = document.getElementById('addName').value;
+            const price = parseFloat(document.getElementById('addPrice').value);
+            const cat = document.getElementById('addCat').value;
+            const icon = document.getElementById('addIcon').value || '🍽️';
+
+            menuItems.push({ id: Date.now(), name: name, price: price, category: cat, icon: icon, available: true });
+            db.ref('menu').set(menuItems);
+            e.target.reset();
+            alert("කෑම අයිතමය එකතු කරන ලදී!");
+        }
+
+        function toggleAvail(index) {
+            menuItems[index].available = !menuItems[index].available;
+            db.ref('menu').set(menuItems);
+        }
+
+        function delItem(index) {
+            menuItems.splice(index, 1);
+            db.ref('menu').set(menuItems);
+        }
+
+        init();
+    </script>
+</body>
+</html>
