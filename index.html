@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hotel Ordering System - Firebase Realtime</title>
+    <title>Hotel Ordering System - Built-in QR Scanner</title>
     
     <!-- Firebase App & Realtime Database SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+    <!-- HTML5 QR Code Scanner Library -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
@@ -23,8 +25,10 @@
         .info-bar { background: white; padding: 15px; border-radius: 12px; margin-bottom: 20px; display: flex; gap: 20px; flex-wrap: wrap; border: 1px solid #e2e8f0; align-items: center; }
         .info-group { flex: 1; min-width: 200px; }
         .info-group label { display: block; font-size: 0.8rem; font-weight: bold; color: #64748b; margin-bottom: 5px; }
-        .info-group select { width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 600; }
         
+        .table-badge-active { background: #dbeafe; color: #1e40af; padding: 8px 12px; border-radius: 6px; font-weight: bold; border: 1px solid #bfdbfe; display: flex; justify-content: space-between; align-items: center; }
+        .scan-trigger-btn { background: #2563eb; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; font-weight: bold; }
+
         .main-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
         @media(max-width: 800px){ .main-layout { grid-template-columns: 1fr; } }
 
@@ -65,12 +69,16 @@
         .del-btn { background: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
         
         .alert-box { background: #eff6ff; border: 1px solid #bfdbfe; padding: 12px; border-radius: 8px; margin-bottom: 15px; color: #1e40af; font-weight: bold; }
+        .qr-link { background: #e0f2fe; color: #0369a1; padding: 4px 8px; border-radius: 4px; text-decoration: none; font-size: 0.85rem; font-weight: bold; word-break: break-all; }
+        
+        /* QR Scanner Modal/Box */
+        #scanner-container { width: 100%; max-width: 400px; margin: 10px auto; display: none; background: white; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1; }
     </style>
 </head>
 <body>
 
     <header>
-        <div class="logo">🍴 ස්මාර්ට් CAGO CAFE (Cloud Sync)</div>
+        <div class="logo">🍴 ස්මාර්ට් හොටෙල් POS (Built-in QR Scanner)</div>
         <div class="nav-tabs">
             <button class="tab-btn active" onclick="showTab('waiter')">වේටර් පැනලය <span id="waiterAlertBadge" class="badge" style="display:none;">!</span></button>
             <button class="tab-btn" onclick="showTab('cashier')">කැෂියර් පැනලය <span id="cashierBadge" class="badge" style="display:none;">0</span></button>
@@ -90,8 +98,17 @@
                 </div>
                 <div class="info-group">
                     <label>මේස අංකය (TABLE NO)</label>
-                    <select id="tableNumber"></select>
+                    <div id="scannedTableDisplay" class="table-badge-active">
+                        <span id="tableNameText">🔄 QR එකක් ස්කෑන් කරන්න...</span>
+                        <button class="scan-trigger-btn" onclick="startQRScanner()">📸 Scan QR</button>
+                    </div>
                 </div>
+            </div>
+
+            <!-- Built-in Camera Scanner Box -->
+            <div id="scanner-container">
+                <div id="reader"></div>
+                <button onclick="stopQRScanner()" style="width:100%; margin-top:10px; background:#ef4444; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer; font-weight:bold;">ස්කෑන් කිරීම නවත්වන්න (Close Camera)</button>
             </div>
 
             <div class="main-layout">
@@ -133,16 +150,15 @@
             <h2>⚙️ හෝටල් පාලන පැනලය (Admin Panel)</h2>
             <br>
 
-            <!-- Table Management Section -->
-            <h3>🪑 මේස කළමනාකරණය (Tables Management)</h3>
+            <h3>🪑 මේස සහ QR ලින්ක්ස් (Tables & QR Links)</h3>
             <div class="form-card">
                 <form onsubmit="addTable(event)" class="form-grid">
-                    <input type="text" id="tableNameInput" placeholder="මේසයේ නම / අංකය (උදා: Table 05, VIP 02)" required>
+                    <input type="text" id="tableNameInput" placeholder="මේසයේ නම / අංකය (උදා: Table 01)" required>
                     <button type="submit" class="save-btn" style="background:#0284c7;">මේසය එකතු කරන්න</button>
                 </form>
             </div>
             <table>
-                <thead><tr><th>මේසයේ නම</th><th>ක්‍රියාමාර්ග</th></tr></thead>
+                <thead><tr><th>මේසයේ නම</th><th>QR Link එක (මෙය Print කර මේසයේ අලවන්න)</th><th>ක්‍රියාමාර්ග</th></tr></thead>
                 <tbody id="adminTableList"></tbody>
             </table>
             <br>
@@ -193,7 +209,6 @@
     </div>
 
     <script>
-        // ඔයාගේ Firebase Config එක මෙතැනට දමා ඇත
         const firebaseConfig = {
             apiKey: "AIzaSyCBsEgSG_sYyXBXDXa46ZzGF1WYcFZ37uA",
             authDomain: "hotel-ordering-system-8f34f.firebaseapp.com",
@@ -204,7 +219,6 @@
             measurementId: "G-WDK9M7FYEF"
         };
 
-        // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
@@ -215,24 +229,22 @@
         let serviceChargePercent = 10;
         let draft = {};
         let currentCat = "all";
+        let selectedTableFromQR = "";
+        let html5QrCode = null;
 
-        // Listen to Realtime Database changes automatically
         function initFirebaseListeners() {
-            // Waiters sync
             db.ref('waiters').on('value', (snapshot) => {
                 waiters = snapshot.val() || ["මේනක", "සනුක", "රොෂාන්"];
                 renderWaiters();
                 renderAdminWaiters();
             });
 
-            // Tables sync
             db.ref('tables').on('value', (snapshot) => {
                 tables = snapshot.val() || ["Table 01", "Table 02", "Table 03", "Table 04", "VIP Room", "Takeaway"];
-                renderTables();
                 renderAdminTablesList();
+                checkUrlTable();
             });
 
-            // Menu sync
             db.ref('menu').on('value', (snapshot) => {
                 menuItems = snapshot.val() || [
                     { id: 1, name: "Chicken Fried Rice", price: 1200, category: "main", icon: "🍚", available: true },
@@ -245,14 +257,12 @@
                 renderAdminTable();
             });
 
-            // Orders sync
             db.ref('orders').on('value', (snapshot) => {
                 const data = snapshot.val();
                 activeOrders = data ? Object.values(data) : [];
                 renderAllOrders();
             });
 
-            // Service Charge sync
             db.ref('serviceCharge').on('value', (snapshot) => {
                 serviceChargePercent = snapshot.val() !== null ? snapshot.val() : 10;
                 const inputEl = document.getElementById('serviceChargeInput');
@@ -265,6 +275,81 @@
 
         function init() {
             initFirebaseListeners();
+        }
+
+        function checkUrlTable() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const tableParam = urlParams.get('table');
+            const nameText = document.getElementById('tableNameText');
+
+            if (tableParam) {
+                selectedTableFromQR = tableParam;
+                if (nameText) {
+                    nameText.innerHTML = `✅ <b style="color: #0284c7;">${tableParam}</b>`;
+                }
+            } else {
+                if (nameText && !selectedTableFromQR) {
+                    selectedTableFromQR = tables[0] || "Table 01";
+                    nameText.innerHTML = `⚠️ තෝරා නැත (Default: ${selectedTableFromQR})`;
+                }
+            }
+        }
+
+        // --- Built-in QR Camera Scanner Functions ---
+        function startQRScanner() {
+            const container = document.getElementById('scanner-container');
+            container.style.display = 'block';
+
+            if (!html5QrCode) {
+                html5QrCode = new Html5Qrcode("reader");
+            }
+
+            html5QrCode.start(
+                { facingMode: "environment" }, // Use back camera
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                (decodedText) => {
+                    // Success callback when QR is scanned
+                    try {
+                        let url = new URL(decodedText);
+                        let tableParam = url.searchParams.get("table");
+                        if (tableParam) {
+                            selectedTableFromQR = tableParam;
+                            document.getElementById('tableNameText').innerHTML = `✅ <b style="color: #0284c7;">${tableParam}</b>`;
+                            alert(`အောင်ජයයි! ${tableParam} මේසය සාර්ථකව තෝරාගන්නා ලදී.`);
+                        } else {
+                            // If QR just contains plain table name text
+                            selectedTableFromQR = decodedText;
+                            document.getElementById('tableNameText').innerHTML = `✅ <b style="color: #0284c7;">${decodedText}</b>`;
+                            alert(`အောင်ජයයි! ${decodedText} මේසය තෝරන ලදී.`);
+                        }
+                    } catch (err) {
+                        // If scanned text is just a raw string like "Table 01"
+                        selectedTableFromQR = decodedText;
+                        document.getElementById('tableNameText').innerHTML = `✅ <b style="color: #0284c7;">${decodedText}</b>`;
+                        alert(`මේසය තෝරන ලදී: ${decodedText}`);
+                    }
+                    stopQRScanner();
+                },
+                (errorMessage) => {
+                    // Scanning ongoing, ignore errors
+                }
+            ).catch((err) => {
+                alert("කැමරාව ක්‍රියාත්මක කරගැනීමට නොහැකි විය: " + err);
+                container.style.display = 'none';
+            });
+        }
+
+        function stopQRScanner() {
+            const container = document.getElementById('scanner-container');
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    container.style.display = 'none';
+                }).catch((err) => {
+                    container.style.display = 'none';
+                });
+            } else {
+                container.style.display = 'none';
+            }
         }
 
         function showTab(tab) {
@@ -290,21 +375,20 @@
             alert("Service Charge වෙනස් කරන ලදී!");
         }
 
-        // --- Table Management Functions ---
-        function renderTables() {
-            const select = document.getElementById('tableNumber');
-            if(!select) return;
-            select.innerHTML = '';
-            if(tables.length === 0) { select.innerHTML = `<option value="">මේස නැත</option>`; return; }
-            tables.forEach(t => { select.innerHTML += `<option value="${t}">${t}</option>`; });
-        }
-
         function renderAdminTablesList() {
             const tbody = document.getElementById('adminTableList');
             if(!tbody) return;
             tbody.innerHTML = '';
+            const baseUrl = window.location.origin + window.location.pathname;
             tables.forEach((t, index) => {
-                tbody.innerHTML += `<tr><td><b>${t}</b></td><td><button class="del-btn" onclick="deleteTable(${index})">අයින් කරන්න</button></td></tr>`;
+                const qrLink = `${baseUrl}?table=${encodeURIComponent(t)}`;
+                tbody.innerHTML += `
+                    <tr>
+                        <td><b>${t}</b></td>
+                        <td><a href="${qrLink}" target="_blank" class="qr-link">${qrLink}</a></td>
+                        <td><button class="del-btn" onclick="deleteTable(${index})">අයින් කරන්න</button></td>
+                    </tr>
+                `;
             });
         }
 
@@ -322,11 +406,14 @@
         }
 
         function deleteTable(index) {
+            if (tables.length <= 1) {
+                alert("අවම වශයෙන් එක මේසයක්වත් තිබිය යුතුය!");
+                return;
+            }
             tables.splice(index, 1);
             db.ref('tables').set(tables);
         }
 
-        // --- Waiter Management Functions ---
         function renderWaiters() {
             const select = document.getElementById('waiterSelect');
             if(!select) return;
@@ -445,13 +532,10 @@
 
         function sendOrder() {
             const waiterSelect = document.getElementById('waiterSelect');
-            const tableSelect = document.getElementById('tableNumber');
-            
             const waiter = waiterSelect ? waiterSelect.value : "මේනක";
-            const table = tableSelect ? tableSelect.value : "Table 01";
+            const table = selectedTableFromQR || tables[0] || "Table 01";
             
             if(!waiter) { alert("වේටර් කෙනෙක් තෝරන්න!"); return; }
-            if(!table) { alert("මේස අංකයක් තෝරන්න!"); return; }
             
             let items = [];
             Object.keys(draft).forEach(id => {
@@ -479,7 +563,7 @@
                     draft = {};
                     renderMenu();
                     renderCart();
-                    alert("ඕඩරය කැෂියර් වෙත සාර්ථකව යවන ලදී!");
+                    alert(`ඕඩරය ${table} සඳහා කැෂියර් වෙත සාර්ථකව යවන ලදී!`);
                 }
             });
         }
@@ -515,7 +599,6 @@
                 }
             }
 
-            // Cashier Pending Grid
             const cashierPendingGrid = document.getElementById('cashierPendingGrid');
             if(cashierPendingGrid) {
                 cashierPendingGrid.innerHTML = pendingList.length === 0 ? '<p style="color:#64748b;">පෙන්ඩින් ඕඩර් නැත.</p>' : '';
@@ -530,7 +613,6 @@
                 });
             }
 
-            // Cashier Billing Grid
             const cashierBillingGrid = document.getElementById('cashierBillingGrid');
             if(cashierBillingGrid) {
                 const billingItems = activeOrders.filter(o => o.status === 'served');
@@ -569,6 +651,7 @@
             const tbody = document.getElementById('adminTable');
             if(!tbody) return;
             tbody.innerHTML = '';
+            menuItems.push = function() {} // safety
             menuItems.forEach((item, index) => {
                 tbody.innerHTML += `
                     <tr>
